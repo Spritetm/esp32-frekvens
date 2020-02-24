@@ -13,10 +13,7 @@
 
 #include "display.h"
 
-static const char *TAG = "frekvens";
-QueueHandle_t queue;
-
-static camera_config_t detection_config = {
+static camera_config_t camera_config = {
     .pin_pwdn = -1,
     .pin_reset = CONFIG_RESET,
     .pin_xclk = CONFIG_XCLK,
@@ -50,12 +47,16 @@ static camera_config_t detection_config = {
 
 void app_main(void) {
 	display_init();
-	int t=0;
-	esp_camera_init(&detection_config);
-
-	uint16_t scaled[16*16];
+	printf("Display inited.\n");
+	esp_camera_init(&camera_config);
+	printf("Camera inited.\n");
 	while(1) {
 		camera_fb_t *pic = esp_camera_fb_get(); //note: gets 160x120 picture
+		if (pic==NULL) {
+			printf("Huh, no frame?\n");
+			continue;
+		}
+		printf("Got frame\n");
 
 		for (int x=0; x<16; x++) {
 			for (int y=0; y<16; y++) {
@@ -63,10 +64,12 @@ void app_main(void) {
 				int sc=0;
 				for (int sy=0; sy<7; sy++) {
 					for (int sx=0; sx<10; sx++) {
-						sc+=pic->buf[(y*7+sy)*120+(x*10+sx)];
+						sc+=pic->buf[(y*7+sy)*160+(x*10+sx)];
 					}
 				}
-				display_setpixel(x, y, sc/70);
+				//note: camera is 45 degrees rotated wrt display
+
+				display_setpixel(15-y, x, sc/70);
 			}
 		}
 		display_flip();

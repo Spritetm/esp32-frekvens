@@ -152,7 +152,7 @@ void display_setpixel(int x, int y, int v) {
 	int bx=(x&7);
 	int by=y/2;
 	if (y&1) bx+=8;
-	if (x&8) by+=8;
+	if ((x&8)==0) by+=8;
 	v=valToPwm(v)>>(16-BITPLANE_CT);
 
 	int bitmask=1;

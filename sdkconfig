@@ -112,10 +112,6 @@ CONFIG_ESPTOOLPY_MONITOR_BAUD=115200
 # end of Serial flasher config
 
 #
-# Example configuration
-#
-
-#
 # Camera configuration
 #
 CONFIG_XCLK_FREQ=20000000
@@ -140,14 +136,6 @@ CONFIG_SCL=27
 CONFIG_RESET=32
 # end of Pin Configuration
 # end of Camera configuration
-
-#
-# Detection configuration
-#
-CONFIG_MAX_ACCEPTED_AVG_DIFF=7
-CONFIG_PICTURE_QUEUE_SIZE=7
-# end of Detection configuration
-# end of Example configuration
 
 #
 # Partition Table
@@ -244,7 +232,7 @@ CONFIG_SPI_SLAVE_ISR_IN_IRAM=y
 #
 # RTCIO configuration
 #
-# CONFIG_RTCIO_SUPPORT_RTC_GPIO_DESC is not set
+CONFIG_RTCIO_SUPPORT_RTC_GPIO_DESC=y
 # end of RTCIO configuration
 # end of Driver configurations
 
