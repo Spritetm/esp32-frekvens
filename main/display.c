@@ -33,7 +33,7 @@ static uint16_t bam_bitplane_a[BITPLANE_CT*16];
 static uint16_t bam_bitplane_b[BITPLANE_CT*16];
 static uint16_t *bam_bitplane_cur=bam_bitplane_a;
 static uint16_t *bam_bitplane_next=bam_bitplane_a;
-static uint16_t *bam_bitplane_draw=bam_bitplane_a;
+static uint16_t *bam_bitplane_draw=bam_bitplane_b;
 
 
 static void IRAM_ATTR bam_timer_isr(void *para) {
@@ -153,6 +153,7 @@ void display_setpixel(int x, int y, int v) {
 	int by=y/2;
 	if (y&1) bx+=8;
 	if ((x&8)==0) by+=8;
+	//do luminance correction
 	v=valToPwm(v)>>(16-BITPLANE_CT);
 
 	int bitmask=1;
