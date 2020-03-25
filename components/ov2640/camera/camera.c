@@ -230,7 +230,7 @@ static esp_err_t camera_fb_init(size_t count)
     }
     memset(_fb2, 0, sizeof(camera_fb_int_t));
     _fb2->size = s_state->fb_size;
-    if (s_state->config.pixel_format == PIXFORMAT_JPEG)
+    if (s_state->config.pixel_format == PIXFORMAT_JPEG || 1) //hack: always allocate internally
     {
       _fb2->buf = (uint8_t *)calloc(_fb2->size, 1);
     }

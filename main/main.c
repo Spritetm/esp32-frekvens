@@ -175,10 +175,10 @@ const imgdesc_t images[]={
 	{0,0,-1} //final
 };
 
-#define EYE_XMIN 190
-#define EYE_XMAX 370
-#define EYE_YMIN 180
-#define EYE_YMAX 310
+#define EYE_XMIN 200
+#define EYE_XMAX 390
+#define EYE_YMIN 170
+#define EYE_YMAX 320
 
 //QQVGA
 #define CAMW 160
@@ -221,7 +221,7 @@ int eye_find(int x, int y, int p) {
 	//quick transform qqvga coords -> eye pupil coords.
 	x=(x*(EYE_XMAX-EYE_XMIN))/CAMH+EYE_XMIN;
 	y=(y*(EYE_YMAX-EYE_YMIN))/CAMW+EYE_YMIN;
-	printf("Eye %d %d\n", x, y);
+	//printf("Eye %d %d\n", x, y);
 	//find image with given status with pupil closest to x,y
 	int mindist=999999999;
 	int minno=0;
@@ -236,8 +236,13 @@ int eye_find(int x, int y, int p) {
 			}
 		}
 	}
-	printf("Eye % 3d % 3d dist % 3d % 3d\n", x, y, x-images[minno].px, y-images[minno].py);
+	//printf("Eye % 3d % 3d dist % 3d % 3d\n", x, y, x-images[minno].px, y-images[minno].py);
 	return minno;
+}
+
+inline void add_clip16(int16_t *v, int w) {
+	if (w>0 && *v<32767-w) *v+=w;
+	if (w<0 && *v>-32767-w) *v+=w;
 }
 
 void calc_mask(uint8_t *mask) {
@@ -245,6 +250,7 @@ void calc_mask(uint8_t *mask) {
 	int iter=32;
 	int intens=192;
 	int16_t *w=calloc(CAMW, CAMH*2);
+	int16_t *w2=calloc(CAMW, CAMH*2);
 
 	for (int y=0; y<16; y++) {
 		for (int x=0; x<16; x++) {
@@ -255,9 +261,13 @@ void calc_mask(uint8_t *mask) {
 	}
 	display_flip();
 	vTaskDelay(200 / portTICK_RATE_MS);
+	printf("1!\n");
 	esp_camera_fb_return(esp_camera_fb_get());
+	printf("2!\n");
 	esp_camera_fb_return(esp_camera_fb_get());
+	printf("3!\n");
 	esp_camera_fb_return(esp_camera_fb_get());
+	printf("Mask: sample with leds on\n");
 	for (int i=0; i<iter; i++) {
 		pic = esp_camera_fb_get(); //note: gets 160x120 picture
 		for (int y=0; y<CAMW*CAMH; y++) {
@@ -265,12 +275,12 @@ void calc_mask(uint8_t *mask) {
 		}
 		esp_camera_fb_return(pic);
 	}
-
+	printf("Sampled.\n");
 
 	for (int y=0; y<16; y++) {
 		for (int x=0; x<16; x++) {
 			int c=0;
-			if (x==3 || x==12 || y==3 || y==12) c=intens;
+			if (x==3 || x==12) c=intens;
 			display_setpixel(15-y, x, c);
 		}
 	}
@@ -279,21 +289,53 @@ void calc_mask(uint8_t *mask) {
 	esp_camera_fb_return(esp_camera_fb_get());
 	esp_camera_fb_return(esp_camera_fb_get());
 	esp_camera_fb_return(esp_camera_fb_get());
+	printf("Mask: sample with leds off\n");
 	for (int i=0; i<iter; i++) {
 		pic = esp_camera_fb_get(); //note: gets 160x120 picture
 		for (int y=0; y<CAMW*CAMH; y++) {
-			if (w[y]<253*iter) w[y]-=pic->buf[y];
+			w[y]-=pic->buf[y];
 		}
 		esp_camera_fb_return(pic);
 	}
 
+
 	int avg=0;
+
+	for (int smooth_iter=0; smooth_iter<12; smooth_iter++) {
+		avg=0;
+		for (int y=0; y<CAMW*CAMH; y++) {
+			if (w[y]<0) w[y]=0;
+			avg+=w[y];
+		}
+		avg=avg/(CAMW*CAMH);
+		memcpy(w2, w, CAMW*CAMH*2);
+
+		for (int y=1; y<CAMH-1; y++) {
+			for (int x=1; x<CAMW-1; x++) {
+				int d=0;
+				d=w2[y*CAMW+x]-avg;
+				//if (w2[y*CAMW+x]>avg*2) d=64*iter;
+				//if (w2[y*CAMW+x]<avg*0.1) d=-64*iter;
+
+				add_clip16(&w[(y-1)*CAMW+(x+1)], d);
+				add_clip16(&w[(y-1)*CAMW+x], d);
+				add_clip16(&w[(y-1)*CAMW+(x-1)], d);
+				add_clip16(&w[(y)*CAMW+(x+1)], d);
+				add_clip16(&w[(y)*CAMW+(x)], d);
+				add_clip16(&w[(y)*CAMW+(x-1)], d);
+				add_clip16(&w[(y+1)*CAMW+(x+1)], d);
+				add_clip16(&w[(y+1)*CAMW+x], d);
+				add_clip16(&w[(y+1)*CAMW+(x-1)], d);
+			}
+		}
+	}
+
+	avg=0;
 	for (int y=0; y<CAMW*CAMH; y++) {
 		if (w[y]<0) w[y]=0;
 		avg+=w[y];
 	}
 	avg=avg/(CAMW*CAMH);
-
 
 	for (int y=0; y<CAMW*CAMH; y++) {
 		if (w[y]<avg*0.3) {
@@ -304,20 +346,66 @@ void calc_mask(uint8_t *mask) {
 			mask[y]=w[y]/iter;
 		}
 	}
+	free(w);
+	free(w2);
+}
+
+int cam_gain, cam_exposure;
+
+void adjust_exposure(sensor_t *sensor, uint8_t *mask, uint8_t *fb, int incr) {
+	int under=0;
+	int over=0;
+	for (int y=0; y<CAMW*CAMH; y++) {
+		if (mask[y]<128) {
+			if (fb[y]<4) under++;
+			if (fb[y]>251) over++;
+		}
+	}
+	if (under>20) cam_exposure+=incr;
+	if (over>20) cam_exposure-=incr;
+	if (cam_exposure>1000) {
+		cam_exposure=900;
+		cam_gain++;
+	}
+	if (cam_exposure<10) {
+		cam_exposure=100;
+		cam_gain--;
+	}
+	//printf("Under %d over %d Exp %d gain %d\n", under, over, cam_exposure, cam_gain);
+	sensor->set_agc_gain(sensor, cam_gain); //0-30
+	sensor->set_aec_value(sensor, cam_exposure); //0-1200
+}
+
+
+void calc_initial_exposure(sensor_t *sensor, uint8_t *mask, int iter, int chg) {
+	camera_fb_t *pic;
+	for (int y=0; y<16; y++) {
+		for (int x=0; x<16; x++) {
+			display_setpixel(15-y, x, 0);
+		}
+	}
+	display_flip();
+
+	for (int i=0; i<iter; i++) {
+		pic = esp_camera_fb_get(); //note: gets 160x120 picture
+		adjust_exposure(sensor, mask, pic->buf, chg);
+		esp_camera_fb_return(pic);
+	}
 }
 
 
 void app_main(void) {
 
-	display_init();
-	printf("Display inited.\n");
 	esp_camera_init(&camera_config);
 	printf("Camera inited.\n");
+	display_init();
+	printf("Display inited.\n");
 	sensor_t *sensor=esp_camera_sensor_get();
 	sensor->set_gain_ctrl(sensor, 0);
 	sensor->set_exposure_ctrl(sensor, 0);
-	sensor->set_agc_gain(sensor, 1); //0-30
-	sensor->set_aec_value(sensor, 100); //0-1200
+	cam_gain=1;
+	cam_exposure=500;
+	
 	
 	uint8_t *prev_img, *diff_img, *mask;
 	prev_img=calloc(CAMW, CAMH);
@@ -336,10 +424,18 @@ void app_main(void) {
 	
 	camera_fb_t *pic;
 	
+	printf("Calculating mask\n");
 	calc_mask(mask);
+//	for (int i=0; i<256; i++) mask[i]=i;
+
+	calc_initial_exposure(sensor, mask, 10, 30);
+	calc_initial_exposure(sensor, mask, 10, 5);
+
 	int blink_timer=10;
+	int blink_ignore_cam=11;
 
 	float eye_x=100, eye_y=100;
+	int eye_idx=0, eye_idx_old=0;
 	while(1) {
 		if (gpio_get_level(GPIO_NUM_2)==0) {
 			mode++;
@@ -350,18 +446,17 @@ void app_main(void) {
 			}
 		}
 
-
 		pic = esp_camera_fb_get(); //note: gets 160x120 picture
 		if (pic==NULL) {
 			printf("Huh, no frame?\n");
 			continue;
 		}
-		printf("Got frame\n");
+//		printf("Got frame\n");
 
 		//Remove mask
 		for (int y=0; y<CAMH; y++) {
 			for (int x=0; x<CAMW; x++) {
-				int d=pic->buf[y*CAMW+x]-mask[y*CAMW+x];
+				int d=(int)pic->buf[y*CAMW+x] - (int)mask[y*CAMW+x];
 				if (d<0) {
 					d=0;
 				}
@@ -370,20 +465,35 @@ void app_main(void) {
 		}
 
 		//Calculate difference
-		int cx, cy, cn;
-		cx=0; cy=0; cn=0;
+		int avgdif;
+		avgdif=0;
 		for (int y=0; y<CAMH; y++) {
 			for (int x=0; x<CAMW; x++) {
 				int d=prev_img[y*CAMW+x]-pic->buf[y*CAMW+x];
 				d=(d*d)/32; //square of the difference
 				if (d>255) d=255; //clip
 				diff_img[y*CAMW+x]=d;
-				//note again: x nd y are exchanged because the camera is rotated
-				cx+=y*d;
-				cy+=x*d;
-				cn+=d;
+				avgdif+=d;
 			}
 		}
+		avgdif=avgdif/(CAMH*CAMW);
+		//printf("avgdif %d\n", avgdif);
+
+		//figure out center of movement
+		int cx, cy, cn;
+		cx=0; cy=0; cn=0;
+		for (int y=0; y<CAMH; y++) {
+			for (int x=0; x<CAMW; x++) {
+				int d=diff_img[y*CAMW+x];
+				if (d>avgdif+2) {
+					//note again: x nd y are exchanged because the camera is rotated
+					cx+=y*d;
+					cy+=x*d;
+					cn+=d;
+				}
+			}
+		}
+
 		if (cn) { //don't divide by zero
 			cx=cx/cn;
 			cy=cy/cn;
@@ -393,17 +503,21 @@ void app_main(void) {
 		//Use cx/cy/cn to find new eye pos.
 		//Note we can use cn as a movement amount indicator. 
 		
-		if (cn>5000) {
+		if (cn>5000 && blink_ignore_cam==0) {
 			float th=(cn/200000.0);
 			if (th>1) th=1;
 			eye_x=eye_x*(1.0-th)+cx*th;
 			eye_y=eye_y*(1.0-th)+cy*th;
 		}
+		if (blink_ignore_cam!=0) blink_ignore_cam--;
+		if (blink_timer==3) blink_ignore_cam=5;
 		if (blink_timer==0) blink_timer=50+(rand()%30);
 		blink_timer--;
 
-		int eye_idx=eye_find(eye_x, eye_y, blink_timer==1?2:blink_timer<3?1:0);
-		printf("cx %d cy %d cn %d ei %d\n", cx, cy, cn, eye_idx);
+		eye_idx_old=eye_idx;
+		eye_idx=eye_find(eye_x, eye_y, blink_timer==1?2:blink_timer<3?1:0);
+		if (eye_idx_old!=eye_idx) blink_ignore_cam=2;
+//		printf("cx %d cy %d cn %d ei %d\n", cx, cy, cn, eye_idx);
 
 		const uint8_t *drawfb=diff_img;
 		if (mode==0) drawfb=pic->buf;
@@ -429,9 +543,11 @@ void app_main(void) {
 		}
 
 	
-		if (mode!=2) display_setpixel(15-cx/7, cy/10, 255);
+		if (mode!=2) display_setpixel(15-cx/7, cy/10, 128);
+		if (mode!=2) display_setpixel(15-eye_x/7, eye_y/10, 64);
 
 		display_flip();
+		adjust_exposure(sensor, mask, pic->buf, 1);
 		esp_camera_fb_return(pic);
 	}
 }

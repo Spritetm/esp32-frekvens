@@ -43,19 +43,16 @@ static void IRAM_ATTR bam_timer_isr(void *para) {
 	gpio_set_level(GPIO_LAK, 0);
 	ets_delay_us(1);
 
-	timer_spinlock_take(TIMER_GROUP_0);
-
-	timer_group_clr_intr_status_in_isr(TIMER_GROUP_0, TIMER_0);
+	TIMERG0.int_clr_timers.t0 = 1;
 
 	//Set alarm value according what current BAM bit is
-	timer_group_set_alarm_value_in_isr(TIMER_GROUP_0, TIMER_0, (1<<bam_bit)*BAM_DIV);
+	uint64_t alrm=(1<<bam_bit)*BAM_DIV;
+	TIMERG0.hw_timer[0].alarm_high = (uint32_t) (alrm >> 32);
+	TIMERG0.hw_timer[0].alarm_low = (uint32_t) alrm;
 
 	/* After the alarm has been triggered
 	  we need enable it again, so it is triggered the next time */
-	timer_group_enable_alarm_in_isr(TIMER_GROUP_0, TIMER_0);
-
-	timer_spinlock_give(TIMER_GROUP_0);
-
+    TIMERG0.hw_timer[0].config.alarm_en = TIMER_ALARM_EN;
 
 	//update bam_bit for what is going to be sent next
 	bam_bit=bam_bit+1;
@@ -82,7 +79,7 @@ static void display_task(void *arg) {
 	//always enable outputs
 	gpio_pad_select_gpio(GPIO_EN);
 	gpio_set_direction(GPIO_EN, GPIO_MODE_OUTPUT);
-	gpio_set_level(GPIO_EN, 0); //high active
+	gpio_set_level(GPIO_EN, 0); //low active
 
 	bam_bit=0;
 
