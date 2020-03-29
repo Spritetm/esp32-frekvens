@@ -1,0 +1,46 @@
+Sorry, I'm not going to include the original imagery and all the side products
+here. I'm not too comfortable with having detailed pictures of my iris out
+there... Instead, I'll tell you the process so you can hopefully recreate it 
+yourself. This is from memory, forgive any small mistakes please.
+
+How this is generated:
+
+- Take video of your eye/face, looking in a bunch of directions and blinking
+- Cut video up in frames, generously cropping the region around one eye, 
+plus a bit of the nose and side of face for reference:
+
+mplayer -ao null -vf eq2=1:1.8:0 -vf-add crop=500:500:910:450 \
+		-vf-add flip,mirror VID_20200226_194203920.mp4 -vf-add scale -vo jpeg
+
+(You probably want to adjust the crop parameters for your situation.)
+
+- Use geeqie or another image viewer to remove 3/4th of the resulting frames as 
+they're more-or-less duplicate or useless and the rest of the steps will take 
+forever unless you reduce the amount of frames. No need to closely pick the 
+frames you're going to use, though, feel free to leave some superfluous frames
+in, just remove the bulk of the useless ones.
+
+- Using Hugin, align the images to get rid of camera and head movement:
+align_image_stack -v -l -a aligned *.jpg
+Yes, this will take a fairly long time, depending on the amount of images you
+have left.
+
+- Generate black-and-white images where you can mark the pupil
+
+mkdir det/
+for x in aligned*.tif; do convert $x -grayscale Rec709Luminance -type TrueColor -define png:color-type=6 det/{$x%.tif}.png; done
+
+- Open all the files in the det/ directory and use a red dot (#ff0000) to mark them: place a dot in the
+  center of the pupil if the eye is open, in the top left corner if it's half-closed and the top right 
+  if it's entirely closed.
+
+- Get the size and top left (x,y) coordinates of the bit of the eye that you would like to show on the
+  box and edit them on the top of buildraw.sh
+
+- Run buildraw.sh
+
+- Copy the list of data that it generates into ../main/main.c under the line 'const imgdesc_t images[]={'
+
+- Copy eye.raw to ../main/eye.raw
+
+- Compile, flash, go!

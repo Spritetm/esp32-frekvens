@@ -1,3 +1,7 @@
+//Driver for the LED board in an IKEA Frekvens LED display block thing. This driver does
+//8-bit BAM in order to get grayscales.
+
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,15 +21,16 @@
 //Frekvens uses 16 SCT2024 LED drivers
 //http://www.starchips.com.tw/pdf/datasheet/SCT2024V01_03.pdf
 
+//I/O pins that go to the Frekvens.
 #define GPIO_LAK 14
 #define GPIO_CLK 15
 #define GPIO_DA 13
-#define GPIO_EN 12
-
+#define GPIO_EN 12 //Note that this pin is always low; you could just wire it to gnd directly if you want.
 
 #define BITPLANE_CT 8
 
 #define BAM_DIV 50 //1MHz/(BAM_DIV*(1<<bit))
+
 
 static volatile int bam_bit;
 static SemaphoreHandle_t bam_sema = NULL;
@@ -60,7 +65,7 @@ static void IRAM_ATTR bam_timer_isr(void *para) {
 		bam_bit=0;
 	}
 
-	/* Now just send the event data back to the main program task */
+	//Poke the display task so it can send over the pixel data for the next bit.
 	xSemaphoreGiveFromISR(bam_sema, NULL);
 
 	//All done.
@@ -127,7 +132,7 @@ static void display_task(void *arg) {
 	timer_enable_intr(TIMER_GROUP_0, TIMER_0);
 
 	spi_transaction_t trans={
-		.length=16*16
+		.length=16*16 //we send 256 bits per update
 	};
 
 	while(1) {
@@ -145,7 +150,7 @@ static void display_task(void *arg) {
 }
 
 void display_setpixel(int x, int y, int v) {
-	//Refrobnicating because pixels are located weirdly
+	//Refrobnicating coordinates because pixels are located weirdly in hardware
 	int bx=(x&7);
 	int by=y/2;
 	if (y&1) bx+=8;
