@@ -1,7 +1,14 @@
 //Driver for the LED board in an IKEA Frekvens LED display block thing. This driver does
 //8-bit BAM in order to get grayscales.
 
-
+/*
+ * ----------------------------------------------------------------------------
+ * "THE BEER-WARE LICENSE" (Revision 42):
+ * Jeroen Domburg <jeroen@spritesmods.com> wrote this file. As long as you retain 
+ * this notice you can do whatever you want with this stuff. If we meet some day, 
+ * and you think this stuff is worth it, you can buy me a beer in return. 
+ * ----------------------------------------------------------------------------
+ */
 
 #include <stdio.h>
 #include <stdlib.h>

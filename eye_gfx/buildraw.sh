@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#License for this hacky script... errm... either public domain or CC0, whichever you can use.
+
 #Box around the eye; the bit that you want to have show up on the LED screen
 EYE_COORDS="289x289+140+98"
 
