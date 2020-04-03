@@ -655,8 +655,7 @@ void app_main(void) {
 		for (int x=0; x<16; x++) {
 			for (int y=0; y<16; y++) {
 				if (mode==2) {
-//					display_setpixel(15-y, x, *drawfb++);
-					display_setpixel(15-y, x, y*16+x);
+					display_setpixel(15-y, x, *drawfb++);
 				} else {
 					//Scale image
 					int sc=0;
